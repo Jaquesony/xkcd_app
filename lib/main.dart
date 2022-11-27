@@ -9,15 +9,28 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    MaterialApp(
-      home: HomeScreen(
-        title: 'XKCD app',
-        latestComic: await getLatestComicNumber(),
-      ),
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: FutureBuilder<int>(
+          future: getLatestComicNumber(),
+          initialData: 0,
+          builder: (context, snapshot) {
+            return HomeScreen(
+              title: 'XKCD app',
+              latestComic: snapshot.data!,
+            );
+          }),
       debugShowCheckedModeBanner: false,
-    ),
-  );
+    );
+  }
 }
 
 Future<int> getLatestComicNumber() async {
@@ -51,6 +64,7 @@ class HomeScreen extends StatelessWidget {
   Future<Map<String, dynamic>> _fetchComic(int n) async {
     final dir = await getTemporaryDirectory();
     var comicNumber = latestComic! - n;
+    print(comicNumber);
     var comicFile = File("${dir.path}/$comicNumber.json");
 
     if (await comicFile.exists() && comicFile.readAsStringSync() != "") {
@@ -62,10 +76,10 @@ class HomeScreen extends StatelessWidget {
           Uri.parse("https://xkcd.com/$comicNumber/info.0.json"),
         ),
       );
-      File('${dir.path}/$comicNumber.png')
-          .writeAsBytesSync(await http.readBytes(comic["img"]));
+      /*File('${dir.path}/$comicNumber.png')
+          .writeAsBytesSync(await http.readBytes(Uri.parse(comic["img"])));
       comic["img"] = '${dir.path}/$comicNumber.png';
-      comicFile.writeAsString(json.encode(comic));
+      comicFile.writeAsString(json.encode(comic));*/
       return comic;
     }
   }
@@ -82,7 +96,7 @@ class HomeScreen extends StatelessWidget {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (BuildContext context) => SelectionPage(),
+                builder: (BuildContext context) => const SelectionPage(),
               ),
             ),
           ),
@@ -92,7 +106,7 @@ class HomeScreen extends StatelessWidget {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (BuildContext context) => StarredPage(),
+                builder: (BuildContext context) => const StarredPage(),
               ),
             ),
           )
@@ -100,13 +114,13 @@ class HomeScreen extends StatelessWidget {
       ),
       body: ListView.builder(
         itemCount: latestComic,
-        itemBuilder: (context, i) => FutureBuilder(
+        itemBuilder: (context, i) => FutureBuilder<Map<String, dynamic>>(
           future: _fetchComic(i),
           builder: (context, comicResult) => comicResult.hasData
               ? ComicTile(comic: comicResult.data)
               : const SizedBox(
                   width: 30,
-                  child: CircularProgressIndicator(),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
         ),
       ),
@@ -121,7 +135,10 @@ class ComicTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Image.network(comic!["img"]),
+      leading: Image.network(
+        comic!["img"],
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.error),
+      ),
       title: Text(comic!["title"]),
       onTap: () {
         Navigator.push(
@@ -183,12 +200,12 @@ class _ComicPageState extends State<ComicPage> {
     );
   }
 
-    Future<bool> _isStarred(int num)  async {
+  Future<bool> _isStarred(int num) async {
     final dir = await getTemporaryDirectory();
     var docsDir = dir.path;
     var file = File('$docsDir/starred');
     List<int> savedComics = json.decode(file.readAsStringSync()).cast<int>();
-    if (savedComics.indexOf(num) != -1) {
+    if (savedComics.contains(num)) {
       return true;
     } else {
       return false;
@@ -258,7 +275,7 @@ class SelectionPage extends StatelessWidget {
           onSubmitted: (String a) => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => FutureBuilder(
+              builder: (context) => FutureBuilder<Map<String, dynamic>>(
                   future: _fetchComic(a),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) return const ErrorPage();
@@ -337,7 +354,7 @@ class StarredPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Browse your Favorite Comics"),
       ),
-      body: FutureBuilder(
+      body: FutureBuilder<List<Map<String, dynamic>>>(
         future: comics,
         builder: (context, snapshot) =>
             snapshot.hasData && snapshot.data!.isNotEmpty
